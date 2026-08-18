@@ -66,10 +66,9 @@ Your EC2 instance needs permission to talk to AWS (to push images to ECR).
 git clone https://github.com/Vickybarai/serverless-ecs-ecr.git
 
 # Go into the project folder
-cd node-todo-cicd
+cd serverless-ecs-ecr
 
 # Build the Docker image
-docker build -t node-todo-app .
 ```
 
 ### Step 5: Create ECR Repository & Push Image
@@ -90,44 +89,211 @@ docker push <AWS_ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/node-todo-app:latest
 ```
 
 ### Step 6: Deploy to ECS Fargate
+
+#### 6.1 Create ECS Cluster
 1. Go to the AWS Console ➔ **ECS (Elastic Container Service)**.
-2. **Create Cluster:**
-   * Click "Create Cluster" ➔ Select "Networking only" (Fargate) ➔ Name it `todo-cluster` ➔ Create.
-3. **Create Task Definition:**
-   * Click "Task Definitions" ➔ "Create new Task Definition" ➔ **Fargate**.
-   * Task Definition Name: `node-todo-task`
-   * Task Role: None
-   * Task Execution Role: `ecsTaskExecutionRole` (AWS creates this automatically)
-   * Task Memory: `0.5 GB (512)`
-   * Task CPU: `0.25 vCPU (256)`
-   * **Add Container:**
-     * Container name: `node-todo-container`
-     * Image URI: Paste your ECR image URI (`<AWS_ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/node-todo-app:latest`)
-     * Port mappings: **8000** tcp
-     * Scroll down to **LOGS** ➔ Select "Auto-configure CloudWatch Logs" ➔ Log prefix: `ecs-todo`
-   * Click **Create**.
-4. **Run the Task:**
-   * Go to your `todo-cluster` ➔ Click **Tasks** ➔ **Run new Task**.
-   * Select the Task Definition you just created (`node-todo-task`).
-   * **Networking:** Select your default VPC and two Subnets.
-   * **Security Group:** Create a new one, and **ADD A RULE allowing All Traffic / TCP / Port 8000 from Anywhere (0.0.0.0/0)**.
-   * Click **Run Task**.
+2. Click **Create Cluster**.
+3. Select **Networking only** (Fargate) as the cluster template.
+4. Configure cluster settings:
+   - **Cluster name**: `node-app-cluster`
+   - **Infrastructure**: AWS Fargate (serverless)
+   - **Monitoring**: Enable Container Insights for CloudWatch logs
+5. Click **Create**.
+
+#### 6.2 Create Task Definition
+1. In the ECS console, click **Task Definitions** → **Create new Task Definition**.
+2. Select **Fargate** as the launch type compatibility.
+3. Configure task settings:
+   - **Task Definition Name**: `node-to-do-app-task-definition`
+   - **Infrastructure**: AWS Fargate
+   - **Architecture**: Linux/X86_64
+   - **Task Size**: 
+     - CPU: `2 vCPU` (2048 CPU units)
+     - Memory: `8 GB` (8192 MB)
+   - **Task Role**: Select `ecsTaskExecutionRole`【turn0search0】【turn0search11】【turn0search13】
+   - **Network Mode**: `awsvpc` (required for Fargate)【turn0search0】【turn0search5】
+
+4. Add container definition:
+   - **Container name**: `node-container`
+   - **Image URI**: Paste your ECR image URI (`<AWS_ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com/node-todo-app:latest`)
+   - **Port mappings**: 
+     - Container port: `8000`
+     - Protocol: `tcp`
+   - **Resource Limits**:
+     - CPU: `2 vCPU` (2048 CPU units)
+     - Memory: `8 GB` (8192 MB)
+   - **Log Configuration**:
+     - Log driver: `awslogs`
+     - Options:
+       - awslogs-group: `/ecs/node-todo`
+       - awslogs-region: `<REGION>`
+       - awslogs-stream-prefix: `ecs`
+
+5. Click **Create**.
+
+#### 6.3 Run the Task
+1. Go to your `node-app-cluster` → **Tasks** → **Run new Task**.
+2. Configure task settings:
+   - **Launch Type**: Fargate
+   - **Cluster**: `node-app-cluster`
+   - **Task Definition**: Select `node-to-do-app-task-definition`
+   - **Network Configuration**:
+     - VPC: Select your default VPC
+     - Subnets: Select 2 public subnets (for public IP assignment)【turn0search5】【turn0search9】
+     - Security Groups: Create a new security group with:
+       - Inbound rule: Allow TCP port `8000` from anywhere (0.0.0.0/0)
+       - Outbound rule: Allow all traffic
+   - **Auto-assign public IP**: ENABLED (required for public access)【turn0search5】【turn0search9】
+
+3. Click **Run Task**.
+4. Wait for the task status to change from `PROVISIONING` to `RUNNING` (typically 1-2 minutes).
+
+#### 6.4 Access the Application
+1. Click on the **Task ID** in the tasks list.
+2. Scroll down to the **Networking** section.
+3. Copy the **Public IP** address.
+4. Open a web browser and navigate to: `http://<PUBLIC_IP>:8000`
 
 ### Step 7: Verify & Check Logs
-1. Wait a minute for the task status to change to **Running**.
-2. Click on the Task ID, scroll down to the **Networking** section, and copy the **Public IP**.
-3. Open a new browser tab and type: `http://<PUBLIC_IP>:8000`
-4. **Check Logs:** Go to AWS CloudWatch ➔ Logs ➔ Log groups ➔ `/ecs/ecs-todo` to see your application logs.
+1. **Access the Application**: Verify the Todo app loads correctly in your browser.
+2. **Check CloudWatch Logs**:
+   - Go to AWS CloudWatch → **Log groups**
+   - Select `/ecs/node-todo`
+   - Click on the log stream (starting with `ecs/`)
+   - Verify application logs are streaming correctly
 
----
+## 🧹 Resource Cleanup (Important!)
+
+To avoid ongoing AWS charges, clean up all resources when you're done:
+
+### 1. Stop and Delete ECS Task
+```bash
+# List running tasks
+aws ecs list-tasks --cluster node-app-cluster --region <REGION>
+
+# Stop the task (replace <TASK_ID> with actual task ID)
+aws ecs stop-task --cluster node-app-cluster --task <TASK_ID> --region <REGION>
+```
+
+### 2. Delete ECS Service and Cluster
+```bash
+# Delete the ECS cluster (this will delete all services and tasks)
+aws ecs delete-cluster --cluster node-app-cluster --region <REGION>
+```
+
+### 3. Deregister Task Definition
+```bash
+# List task definition revisions
+aws ecs list-task-definitions --family node-to-do-app-task-definition --region <REGION>
+
+# Deregister the specific revision (replace <REVISION> with actual revision number)
+aws ecs deregister-task-definition --task-definition node-to-do-app-task-definition:<REVISION> --region <REGION>
+```
+
+### 4. Delete ECR Repository
+```bash
+# Delete the ECR repository (this will delete all images)
+aws ecr delete-repository --repository-name node-todo-app --region <REGION> --force
+```
+
+### 5. Delete CloudWatch Log Group
+```bash
+# Delete the CloudWatch log group
+aws logs delete-log-group --log-group-name /ecs/node-todo --region <REGION>
+```
+
+### 6. Delete Security Group
+```bash
+# Delete the security group (replace <SECURITY_GROUP_ID> with actual ID)
+aws ec2 delete-security-group --group-id <SECURITY_GROUP_ID> --region <REGION>
+```
+
+### 7. Terminate EC2 Instance
+```bash
+# Terminate the EC2 instance (replace <INSTANCE_ID> with actual instance ID)
+aws ec2 terminate-instances --instance-ids <INSTANCE_ID> --region <REGION>
+```
+
+## 📊 Resource Summary
+
+| Resource | Name | Purpose |
+|----------|------|---------|
+| **EC2 Instance** | `ubuntu` | Build server for Docker image |
+| **ECR Repository** | `node-todo-app` | Stores Docker container images |
+| **ECS Cluster** | `node-app-cluster` | Manages Fargate tasks |
+| **Task Definition** | `node-to-do-app-task-definition` | Template for container tasks |
+| **Security Group** | `ecs-sg` | Controls network access |
+| **CloudWatch Logs** | `/ecs/node-todo` | Centralized application logs |
+
+## 🔧 Configuration Details
+
+### Task Size Considerations
+- **Video Configuration**: 2 vCPU, 8 GB memory (for production workloads)
+- **Free Tier Alternative**: 0.25 vCPU (256 CPU units), 0.5 GB (512 MB) memory【turn0search0】【turn0search1】
+- **CPU/Memory Validation**: Fargate requires specific CPU/memory combinations【turn0search0】【turn0search4】
+
+### Network Configuration
+- **Public IP Assignment**: Required for direct task access【turn0search5】【turn0search9】
+- **Security Groups**: Must allow inbound traffic on port 8000
+- **VPC Flow Logs**: Enabled for monitoring network traffic【turn0search5】
+
+### IAM Roles
+- **Task Execution Role**: `ecsTaskExecutionRole` (required for ECR pulls and CloudWatch logging)【turn0search0】【turn0search11】【turn0search13】
+- **Task Role**: Optional, for application AWS API calls (not used in this basic setup)
 
 ## 🆘 Common Troubleshooting
-* **Page won't load (Timeout):** You forgot to open Port `8000` in the ECS Task Security Group.
-* **Task keeps crashing/stopping:** Check CloudWatch logs. Usually means the app crashed on startup or the port mapping in the Task Definition is wrong.
-* **Docker push fails:** Ensure your `aws configure` credentials are correct and the ECR image URI has no typos.
 
----
+<details>
+<summary>🔍 Common Issues and Solutions</summary>
 
+### **Task Fails to Start**
+```bash
+# Check task events
+aws ecs describe-tasks --cluster node-app-cluster --tasks <TASK_ID> --region <REGION>
+
+# Common causes:
+# 1. Invalid CPU/memory configuration
+# 2. Missing IAM permissions for task execution role
+# 3. Security group blocking outbound traffic
+```
+
+### **Cannot Access Application**
+```bash
+# Verify security group allows port 8000
+aws ec2 describe-security-groups --group-ids <SECURITY_GROUP_ID> --region <REGION>
+
+# Check task public IP assignment
+aws ecs describe-tasks --cluster node-app-cluster --tasks <TASK_ID> --region <REGION> --query 'tasks[0].attachments[0].details'
+```
+
+### **Image Pull Failure**
+```bash
+# Verify ECR permissions
+aws ecr get-authorization-token --region <REGION> --output text --query 'authorizationData[].authorizationToken'
+
+# Check if image exists in ECR
+aws ecr describe-images --repository-name node-todo-app --region <REGION>
+```
+
+### **CloudWatch Logs Not Appearing**
+```bash
+# Verify log group exists
+aws logs describe-log-groups --log-group-name-prefix /ecs/node-todo --region <REGION>
+
+# Check task execution role permissions
+aws iam get-role-policy --role-name ecsTaskExecutionRole --policy-name ECS-Logs-Policy --region <REGION>
+```
+
+</details>
 
 ## 📝 Resume Bullet Point
 > "Containerized a Node.js application using Docker, pushed images to AWS ECR, and deployed the application on serverless AWS ECS Fargate. Configured VPC networking, security groups, and integrated CloudWatch for centralized log monitoring."
+
+## 🎯 Key Learning Outcomes
+
+1. **ECS Fargate Fundamentals**: Serverless container orchestration without managing EC2 instances
+2. **Task Definitions**: Configuring CPU, memory, and container settings for Fargate tasks【turn0search0】【turn0search1】
+3. **Network Configuration**: Understanding public IP assignment and security groups for Fargate tasks【turn0search5】【turn0search9】
+4. **IAM Roles**: Differentiating between task execution roles and task roles【turn0search11】【turn0search13】
+5. **Monitoring**: Centralized logging with CloudWatch Logs
+6. **Cost Management**: Proper cleanup of AWS resources to avoid charges
