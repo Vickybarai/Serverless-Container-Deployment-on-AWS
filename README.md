@@ -1,19 +1,7 @@
-# serverless-ecs-ecr
-A simple Node.js Todo application containerized with Docker and deployed on AWS ECS (Fargate) using EC2 as a build server. This project uses ECR for image storage and CloudWatch for logging
----
-Here is a clean, simple, beginner-friendly README tailored for a junior developer. You can copy and paste this directly into your `README.md` file on GitHub.
-
-***
 
 # 🚀 Node.js Todo App on AWS ECS Fargate
 
 A simple Node.js Todo application containerized with Docker and deployed on AWS ECS (Fargate) using EC2 as a build server. This project uses ECR for image storage and CloudWatch for logging.
-
-## 📋 Prerequisites
-Before you begin, make sure you have:
-1. An **AWS Account**
-2. Basic knowledge of the AWS Console
-3. An IDE (like VS Code) and a terminal
 
 ---
 
