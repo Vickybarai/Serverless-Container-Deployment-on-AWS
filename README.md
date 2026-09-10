@@ -63,10 +63,10 @@ Your EC2 instance needs permission to talk to AWS (to push images to ECR).
 ### Step 4: Clone Code & Build Docker Image
 ```bash
 # Clone the repository
-git clone https://github.com/Vickybarai/serverless-ecs-ecr.git
+git clone https://github.com/Vickybarai/Serverless-Container-Deployment-on-AWS.git
 
 # Go into the project folder
-cd serverless-ecs-ecr
+cd Serverless-Container-Deployment-on-AWS
 
 # Build the Docker image
 ```
